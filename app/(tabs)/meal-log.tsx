@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { View, FlatList, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { MealLog } from '../../types/types';
@@ -16,7 +15,7 @@ export default function MealLogScreen() {
       .from('meal_logs')
       .select(`
         id,
-        date,
+        timestampz,
         quantity,
         manualOverrideServings,
         comment,
@@ -28,14 +27,14 @@ export default function MealLogScreen() {
           createdAt
         )
       `)
-      .order('date', { ascending: false });
+      .order('timestampz', { ascending: false });
 
     if (error) {
       console.error('Error fetching meal logs:', error);
     } else {
       const formatted = data.map((log: any) => ({
         id: log.id,
-        date: log.date,
+        date: log.timestampz,
         quantity: log.quantity,
         manualOverrideServings: log.manualOverrideServings ?? null,
         notes: log.comment ?? null,

@@ -63,6 +63,14 @@ Runs the logMeal() logic above
 ❌ Not enough Tomato in stock.
 This allows isolated testing before full UI is wired up.
 
+⚠️ Remaining Known Issues (For Later)
+
+Meal Log UI: Items don’t render despite correct data. Likely a rendering or lookup logic issue (e.g., recipe_id → name).
+
+Supabase Studio caching: Delayed visual reflection of inventory changes.
+
+These aren’t blockers for the current dev milestone and can be deferred.
+
 🔹 Step 1.5: Visual Validation in Supabase
 After test entry:
 
@@ -71,6 +79,11 @@ View inventory table → confirm correct deduction
 View meal_logs table → confirm log entry added
 
 If any errors (e.g., insufficient stock), handle them gracefully
+
+🟡 Final Verdict for Step 1.5:
+Functionally completed — all logic, deduction, and logging work as expected.
+
+Visually partially incomplete — due to Supabase Studio not showing updated inventory in real-time. This seems to be a display issue, not a logic error.
 
 🧪 Completion Criteria (Batch-Based)
 ✅	Task

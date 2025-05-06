@@ -11,27 +11,26 @@ export default function MealLogScreen() {
   const [modalVisible, setModalVisible] = useState(false);
 
   const fetchMealLogs = async () => {
+    console.log('🧪 Fetching meal logs with JOIN...');
     const { data, error } = await supabase
       .from('meal_logs')
       .select(`
-        id,
-        timestampz,
-        quantity,
-        manualOverrideServings,
-        comment,
-        recipe:recipe_id (
+        *,
+        recipes (
           id,
           name,
           category,
           ingredients,
-          createdAt
+          createdAt,
+          description
         )
       `)
       .order('timestampz', { ascending: false });
 
     if (error) {
-      console.error('Error fetching meal logs:', error);
+      console.error('❌ Error fetching meal logs (JOIN):', error);
     } else {
+      console.log('✅ Meal logs fetched with recipes:', data);
       const formatted = data.map((log: any) => ({
         id: log.id,
         date: log.timestampz,
@@ -39,12 +38,12 @@ export default function MealLogScreen() {
         manualOverrideServings: log.manualOverrideServings ?? null,
         notes: log.comment ?? null,
         recipe: {
-          id: log.recipe.id,
-          name: log.recipe.name,
-          category: log.recipe.category,
-          ingredients: log.recipe.ingredients,
-          createdAt: log.recipe.createdAt,
-          description: '',
+          id: log.recipes?.id ?? '',
+          name: log.recipes?.name ?? 'Unknown',
+          category: log.recipes?.category ?? '',
+          ingredients: log.recipes?.ingredients ?? [],
+          createdAt: log.recipes?.createdAt ?? '',
+          description: log.recipes?.description ?? '',
         },
       }));
       setMealLogs(formatted);

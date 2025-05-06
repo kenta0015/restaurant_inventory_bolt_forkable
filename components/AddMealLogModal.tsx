@@ -1,124 +1,140 @@
-import React, { useEffect, useState } from 'react';
-import { Modal, View, Text, TextInput, StyleSheet, Button, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Modal, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { supabase } from '../supabaseClient';
-import { Recipe } from '../types/types';
 
-interface Props {
-  visible: boolean;
-  onClose: () => void;
-  onAdded: () => void;
-}
+export default function AddMealLogModal({ visible, onClose, onAdded }: any) {
+  const [recipeId, setRecipeId] = useState('');
+  const [quantity, setQuantity] = useState('');
 
-export default function AddMealLogModal({ visible, onClose, onAdded }: Props) {
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [recipeId, setRecipeId] = useState<string>('');
-  const [quantity, setQuantity] = useState<string>('');
-  const [override, setOverride] = useState<string>('');
-  const [comment, setComment] = useState<string>('');
-
-  useEffect(() => {
-    const fetchRecipes = async () => {
-      const { data, error } = await supabase.from('recipes').select('*');
-      if (data) setRecipes(data);
-      if (error) console.error('Error fetching recipes:', error);
-    };
-
-    if (visible) {
-      fetchRecipes();
+  const handleSave = async () => {
+    if (!recipeId || !quantity) {
+      Alert.alert('Error', 'Please enter recipe ID and quantity');
+      return;
     }
-  }, [visible]);
 
-  const handleSubmit = async () => {
-    if (!recipeId || !quantity) return;
+    const batchCount = parseInt(quantity);
 
-    const { error } = await supabase.from('meal_logs').insert([
-      {
-        recipe_id: recipeId,
-        quantity: Number(quantity),
-        manualOverrideServings: override ? Number(override) : null,
-        comment: comment || null,
-      },
-    ]);
+    // 1. Get ingredients from recipe
+    const { data: recipeData, error: recipeError } = await supabase
+      .from('recipes')
+      .select('ingredients')
+      .eq('id', recipeId)
+      .single();
 
-    if (error) {
-      console.error('Error inserting meal log:', error);
+    if (recipeError || !recipeData) {
+      console.error('❌ Failed to fetch recipe:', recipeError);
+      Alert.alert('Error', 'Failed to fetch recipe data');
+      return;
+    }
+
+    // 2. Deduct from inventory
+    for (const ingredient of recipeData.ingredients) {
+      const totalUsed = ingredient.quantity * batchCount;
+
+      // Get current inventory
+      const { data: currentItem, error: fetchError } = await supabase
+        .from('inventory')
+        .select('quantity')
+        .eq('id', ingredient.id)
+        .single();
+
+      if (fetchError || !currentItem) {
+        console.error('❌ Failed to fetch inventory item:', fetchError);
+        continue;
+      }
+
+      const newQuantity = currentItem.quantity - totalUsed;
+
+      // Update inventory
+      const { error: updateError } = await supabase
+        .from('inventory')
+        .update({ quantity: newQuantity })
+        .eq('id', ingredient.id);
+
+      if (updateError) {
+        console.error('❌ Error updating inventory:', updateError);
+      }
+    }
+
+    // 3. Add to meal_logs
+    const { error: insertError } = await supabase.from('meal_logs').insert({
+      recipe_id: recipeId,
+      quantity: batchCount,
+    });
+
+    if (insertError) {
+      console.error('❌ Failed to log meal:', insertError);
     } else {
-      onAdded(); // Refresh meal logs
+      console.log('✅ Meal logged');
+      onAdded();
       onClose();
-      setRecipeId('');
-      setQuantity('');
-      setOverride('');
-      setComment('');
     }
   };
 
   return (
     <Modal visible={visible} animationType="slide">
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Add Meal Log</Text>
-
-        <Text style={styles.label}>Recipe</Text>
-        {recipes.map((r) => (
-          <TouchableOpacity
-            key={r.id}
-            style={[
-              styles.recipeOption,
-              r.id === recipeId && styles.recipeSelected,
-            ]}
-            onPress={() => setRecipeId(r.id)}
-          >
-            <Text>{r.name}</Text>
-          </TouchableOpacity>
-        ))}
-
-        <Text style={styles.label}>Quantity</Text>
+      <View style={styles.container}>
+        <Text style={styles.label}>Recipe ID:</Text>
         <TextInput
           style={styles.input}
-          keyboardType="numeric"
+          value={recipeId}
+          onChangeText={setRecipeId}
+        />
+
+        <Text style={styles.label}>Batch Quantity:</Text>
+        <TextInput
+          style={styles.input}
           value={quantity}
           onChangeText={setQuantity}
-        />
-
-        <Text style={styles.label}>Manual Override (optional)</Text>
-        <TextInput
-          style={styles.input}
           keyboardType="numeric"
-          value={override}
-          onChangeText={setOverride}
         />
 
-        <Text style={styles.label}>Comment (optional)</Text>
-        <TextInput
-          style={[styles.input, { height: 80 }]}
-          multiline
-          value={comment}
-          onChangeText={setComment}
-        />
+        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
+          <Text style={styles.saveButtonText}>Save</Text>
+        </TouchableOpacity>
 
-        <View style={styles.buttonRow}>
-          <Button title="Cancel" onPress={onClose} />
-          <Button title="Save" onPress={handleSubmit} />
-        </View>
-      </ScrollView>
+        <TouchableOpacity onPress={onClose} style={styles.cancelButton}>
+          <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20 },
-  title: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-  label: { marginTop: 12, fontWeight: 'bold' },
+  container: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
   input: {
-    borderWidth: 1, borderColor: '#ccc',
-    borderRadius: 8, padding: 8, marginTop: 4,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 4,
+    padding: 10,
+    marginBottom: 20,
   },
-  recipeOption: {
-    padding: 10, marginVertical: 4, backgroundColor: '#eee', borderRadius: 6,
+  saveButton: {
+    backgroundColor: '#007aff',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  recipeSelected: {
-    backgroundColor: '#c0e0ff',
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
   },
-  buttonRow: {
-    flexDirection: 'row', justifyContent: 'space-between', marginTop: 20,
+  cancelButton: {
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#007aff',
+    fontSize: 16,
   },
 });
